@@ -242,30 +242,29 @@ void addOperationCodeLine(string varTarget, string var1, string var2, string op,
  * @return 0 if it is not an operator, 1 otherwise
  */
 
-void addStoreCodeLine(){
 
-}
 /** adds the allocation code to allocateCodeStringsVector in the form
  * %<originalVarName> = alloca i32
  * @param originalVarName variable to be allocated
  */
-void addAllocationCodeLine(string originalVarName){
-    allocateCodeStringsVector.push_back("%" + originalVarName + " = alloca i32");
+void addAllocationCodeLine(string originalVarName, int numOfTabs){
+    allocateCodeStringsVector.push_back(returnTabsString(numOfTabs)+"%" + originalVarName + " = alloca i32");
 }
 /** adds the initialization code to initializeCodeStringsVector in the form
  * store i32 0, i32* %<originalVarName>
  * @param originalVarName variable to be initialized
  */
-void addInitializationCodeLine(string originalVarName){
-    initializeCodeStringsVector.push_back("store i32 0, i32* %" + originalVarName);
+void addInitializationCodeLine(string originalVarName, int numOfTabs){
+    initializeCodeStringsVector.push_back(returnTabsString(numOfTabs)+"store i32 0, i32* %" + originalVarName);
 }
 /** adds allocation and initialization codeif the variable has not been initialized before
  * @param originalVarName variable to be allocated and initialized
  */
 void initVarIfNotExist(string originalVarName){
     if(isOriginalVariable(originalVarName) && !isVariableInitialized(originalVarName)){
-        addAllocationCodeLine(originalVarName);
-        addInitializationCodeLine(originalVarName);
+        addAllocationCodeLine(originalVarName, 1);
+        addInitializationCodeLine(originalVarName, 1);
+        variableSet.insert(originalVarName);
     }
 }
 
@@ -307,7 +306,15 @@ string postfixToExpressionCode(int numOfTabs){
     }
     return expressionStack.top();
 }
-
+/** creates a store code in the form:
+ * store i32 <varToStore>, i32* <targetVar>
+ * @param targetVar variable to store the value in
+ * @param varToStore value or variable to store
+ * @param numOfTabs number of tabs in the beginning
+ */
+void addStoreCodeLine(string targetVar, string varToStore, int numOfTabs){
+    codeStringsVector.push_back(returnTabsString(numOfTabs)+"store i32 "+ varToStore +", i32* " +targetVar);
+}
 
 ///while functions
 void getUpdateWhileName(string *whcond,string *whbody,string *whend){
