@@ -6,6 +6,7 @@
 #include <regex>
 #include <queue>
 #include <bits/stdc++.h>
+#include <fstream>
 
 using namespace std;
 #define ERROR_STRING  "ERROR_STRING"
@@ -24,6 +25,7 @@ string globalWhileEndName = "whend1";
 vector<string> allocateCodeStringsVector;
 vector<string> initializeCodeStringsVector;
 vector<string> codeStringsVector;
+vector<string> syntaxErrorVector;
 
 unordered_set<string> variableSet;
 
@@ -306,6 +308,42 @@ string postfixToExpressionCode(int numOfTabs){
     }
     return expressionStack.top();
 }
+
+
+void createSyntaxErrorLines(int line){
+    syntaxErrorVector.emplace_back("; ModuleID = \'mylang2ir\'");
+    syntaxErrorVector.emplace_back("declare i32 @printf(i8*, ...)");
+    syntaxErrorVector.emplace_back(R"(@print.str = constant [4 x i8] c"%d\0A\00")");
+    syntaxErrorVector.emplace_back("define i32 @main() {");
+    syntaxErrorVector.emplace_back(returnTabsString(1) + "call i32 (i8*, ...)* @printf(i8* getelementptr ([23 x i8]* @print.str, i32 0, i32 0), i32 " +
+                                           to_string(line) + " )");
+    syntaxErrorVector.emplace_back(returnTabsString(1)+"ret i32 0");
+    syntaxErrorVector.emplace_back("}");
+//    ofstream llFile("file.ll");
+//    for(const string& str : syntaxErrorVector){
+//        llFile << str << endl;
+//    }
+//    llFile.close();
+//    exit(0);
+}
+
+
+
+/** creates the expression code, checks for the syntax errors. If any, program exits.
+ *
+ * @param expr expression to be converted
+ * @param line line of code to be converted
+ */
+string createExpressionCode(string expr, int line){
+    int isSyntaxError = !infixToPostFix(expr);
+    if(isSyntaxError){
+        createSyntaxErrorLines(line);
+        return ERROR_STRING;
+    }
+    else {
+        return postfixToExpressionCode(1);
+    }
+}
 /** creates a store code in the form:
  * store i32 <varToStore>, i32* <targetVar>
  * @param targetVar variable to store the value in
@@ -315,7 +353,16 @@ string postfixToExpressionCode(int numOfTabs){
 void addStoreCodeLine(string targetVar, string varToStore, int numOfTabs){
     codeStringsVector.push_back(returnTabsString(numOfTabs)+"store i32 "+ varToStore +", i32* " +targetVar);
 }
-
+void createAssignmentCode(string targetVarOriginal, string expr, int line){
+    string varToStore = createExpressionCode(expr, line);
+    initVarIfNotExist(targetVarOriginal);
+    if(isOriginalVariable(varToStore)){
+        string temp = getUpdateGlobalVarName();
+        addLoadCodeLine(temp, "%" + varToStore, 1);
+        varToStore = temp;
+    }
+    addStoreCodeLine("%" + targetVarOriginal, varToStore,1);
+}
 ///while functions
 void getUpdateWhileName(string *whcond,string *whbody,string *whend){
     *whcond = globalWhileCondName;
@@ -327,5 +374,26 @@ void getUpdateWhileName(string *whcond,string *whbody,string *whend){
     globalWhileEndName = "whend" + to_string(whileNum);
 }
 int main(){
+//    createSyntaxErrorLines(100);
+    createAssignmentCode("oyku","10",9);
+    cout << "-----ASSIGN------" << endl;
 
+    for(auto line : allocateCodeStringsVector){
+        cout << line << endl;
+    }
+    cout << "-----INIT------" << endl;
+
+    for(auto line : initializeCodeStringsVector){
+        cout << line << endl;
+    }
+    cout << "-----CODE------" << endl;
+
+    for(auto line : codeStringsVector){
+        cout << line << endl;
+    }
+    cout << "-----SYNTAX------" << endl;
+
+    for(auto line : syntaxErrorVector){
+        cout << line << endl;
+    }
 }
