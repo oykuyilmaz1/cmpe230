@@ -10,6 +10,18 @@
 
 using namespace std;
 #define ERROR_STRING  "ERROR_STRING"
+#define ASSIGNMENT_STRING  "ASSIGNMENT_STRING"
+#define WHILE_COND_STRING  "WHILE_COND_STRING"
+#define WHILE_BODY_STRING  "WHILE_BODY_STRING"
+#define WHILE_END_STRING  "WHILE_END_STRING"
+#define IF_START_STRING  "IF_START_STRING"
+#define IF_END_STRING  "IF_END_STRING"
+#define CHOOSE_STRING  "CHOOSE_STRING"
+#define PRINT_STRING  "PRINT_STRING"
+#define EMPTY_lINE_STRING  "EMPTY_lINE_STRING"
+#define EXPRESSION_STRING  "EXPRESSION_STRING"
+
+
 /// expression variables
 queue<string> expresionQueue;
 int nameNum = 1;
@@ -35,6 +47,9 @@ string returnTabsString(int numOfTabs){
         result += "\t";
     }
     return result;
+}
+string removeWhiteSpaces(string line){
+    return std::regex_replace( line, std::regex("\\s+"), "" );
 }
 
 ///boolean functions
@@ -63,6 +78,37 @@ int isOriginalVariable(string var){
     return !isdigit(var[0]) && var.at(0) != '%';
 }
 
+int isValidVariable(string var){
+    int started = 0, ended =0;
+    for(char c:var){
+        if(started){
+            if(c == ' '){
+                ended = 1;
+                started = 0;
+            }
+            else if(!isalnum(c)){
+                return 0;
+            }
+        }
+        else if(ended){
+            if(c != ' '){
+                return 0;
+            }
+        }
+        else{
+            if(isalpha(c)){
+                started = 1;
+            }
+            else if(c == ' '){
+                continue;
+            }
+            else {
+                return 0;
+            }
+        }
+    }
+    return 1;
+}
 
 ///expression functions//////
 
@@ -84,11 +130,14 @@ string getUpdateGlobalVarName(){
  * @return 0 if syntax error, 1 otherwise
  */
 int infixToPostFix(string str){
+    if(removeWhiteSpaces(str) == "$"){
+        return 0;
+    }
     stack<char> stk;
     stack<char> pStack;
     int i = 0;
     int isOpen = 0,isClosed = 0, isOperator = 0, isVar =0, isNumber = 0;
-    int n = str.length();
+    int n = str.length()-1;
     while(i < n){
         char c = str[i];
         if(c == '('){
@@ -354,6 +403,12 @@ void addStoreCodeLine(string targetVar, string varToStore, int numOfTabs){
     codeStringsVector.push_back(returnTabsString(numOfTabs)+"store i32 "+ varToStore +", i32* " +targetVar);
 }
 void createAssignmentCode(string targetVarOriginal, string expr, int line){
+    if(isValidVariable(targetVarOriginal)){
+        targetVarOriginal = removeWhiteSpaces(targetVarOriginal);
+    }
+    else {
+        createSyntaxErrorLines(line);
+    }
     string varToStore = createExpressionCode(expr, line);
     initVarIfNotExist(targetVarOriginal);
     if(isOriginalVariable(varToStore)){
@@ -373,10 +428,181 @@ void getUpdateWhileName(string *whcond,string *whbody,string *whend){
     globalWhileBodyName = "whbody" + to_string(whileNum);
     globalWhileEndName = "whend" + to_string(whileNum);
 }
+void createWhileConditionCode(string expr, int line){
+    codeStringsVector.emplace_back(globalWhileCondName + ":");
+    string result = createExpressionCode(expr, line);
+    if(isOriginalVariable(result)){
+        string temp = getUpdateGlobalVarName();
+        addLoadCodeLine(temp, "%" + result, 1);
+        result = temp;
+    }
+    string temp = getUpdateGlobalVarName();
+    codeStringsVector.emplace_back(returnTabsString(1) + temp + " = icmp ne i32 "+ result+", 0");
+    codeStringsVector.emplace_back(returnTabsString(1) + "br i1 " + temp + ", label %" + globalWhileBodyName + ", label %" + globalWhileEndName);
+}
+
+///print function
+void createPrintCode(string expr, int line){
+    string result = createExpressionCode(expr, line);
+    if(isOriginalVariable(result)){
+        string temp = getUpdateGlobalVarName();
+        addLoadCodeLine(temp, "%" + result, 1);
+        result = temp;
+    }
+    codeStringsVector.emplace_back(returnTabsString(1) + "call i32 (i8*, ...)* "
+                                                         "@printf(i8* getelementptr ([4 x i8]* "
+                                                         "@print.str, i32 0, i32 0), i32 "+ result +  ")");
+}
+
+///parse line function
+string checkExpressionOrCondition(string str){
+    if(isValidVariable(str)){
+        str = removeWhiteSpaces(str);
+        if(str == "if"){
+            return IF_START_STRING;
+        }
+        else if(str == "choose"){
+            return CHOOSE_STRING;
+        }
+        else if(str == "while"){
+            return WHILE_COND_STRING;
+        }
+        else if(str == "print"){
+            return PRINT_STRING;
+        }
+        else {
+            return EXPRESSION_STRING;
+        }
+    }
+    return ERROR_STRING;
+}
+int checkParentheses(string str){
+    stack<char> stk;
+    for(char c:str){
+        if(c == '('){
+            stk.push(c);
+        }
+        else if(c == ')'){
+            stk.pop();
+        }
+    }
+    return stk.empty();
+}
+int extractCondition(string str, string *expr){
+    if(!checkParentheses(str)){
+        return 0;
+    }
+    int i = 1;
+    int n = str.length();
+    int isValid = 0;
+    string temp;
+    while(i<n){
+        if(str[i] == '{'){
+            if(removeWhiteSpaces(str.substr(i)) == "{$"){
+                isValid = 1;
+                break;
+            }
+            else{
+                break;
+            }
+        }
+        temp += str[i];
+        i++;
+    }
+    if(!isValid){
+        return isValid;
+    }
+    n = temp.length();
+    i = n-1;
+    while(i >= 0){
+        if(temp[i] == ')'){
+            temp.erase(i);
+            break;
+        }
+        i--;
+    }
+    *expr = temp;
+    return isValid;
+}
+int extractPrint(string str, string *expr){
+    if(!checkParentheses(str)){
+        return 0;
+    }
+    int n = str.length() -1;
+    int i = n-1;
+    while(i >= 0){
+        if(str[i] == ')') {
+            str.erase(i);
+            break;
+        }
+        i--;
+    }
+    *expr = str;
+    return 1;
+}
+
+//string parseAndTurnToLLCode(string line, int lineNum, string lineBefore){
+//    line+="$";
+//    if(removeWhiteSpaces(line) == "$"){
+//        return EMPTY_lINE_STRING;
+//    }
+//    int i = 0;
+//    int n = line.length()-1;
+//    string str1="",expr="", str2="",str3="";
+//    int isRightP = 0, isCurly = 0;
+//    while(i < n){
+//        char c = line[i];
+//        if(c == '='){
+//            expr = line.substr(i+1);
+//            createAssignmentCode(str1, expr,lineNum);
+//            if(lineBefore == WHILE_BODY_STRING){
+//                return WHILE_BODY_STRING;
+//            }
+//            return ASSIGNMENT_STRING;
+//        }
+//        else if(c == '('){
+//            string condType = checkExpressionOrCondition(str1);
+//            if(condType == IF_START_STRING){
+//                return IF_START_STRING;
+//            }
+//            else if(condType == CHOOSE_STRING){
+//                return CHOOSE_STRING;
+//            }
+//            else if(condType == WHILE_COND_STRING){
+//                return WHILE_COND_STRING;
+//            }
+//            else if(condType == PRINT_STRING){
+//                return PRINT_STRING;
+//            }
+//            else {
+//                createSyntaxErrorLines(lineNum);
+//            }
+//        }
+//        else if(isalnum(c)){
+//            str1 += c;
+//        }
+//
+//        i++;
+//    }
+//}
+
+
 int main(){
 //    createSyntaxErrorLines(100);
-    createAssignmentCode("oyku","10",9);
+//    createAssignmentCode("oyku","10 + a * (b+c)$",9);
+//    createPrintCode("aa + bb *c$",8);
+    createWhileConditionCode("n$",9);
+
+//    cout<<isValidVariable("oyk*u")<<endl;
+//    parseAndTurnToLLCode("a89 = ", 1);
+//    string expr;
+//    int v = extractCondition("((oykujykjutky)) { $", &expr);
+//    cout<<expr<< " "<<v<<endl;
+
+
+
     cout << "-----ASSIGN------" << endl;
+
 
     for(auto line : allocateCodeStringsVector){
         cout << line << endl;
