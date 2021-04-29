@@ -695,6 +695,8 @@ string createChooseCode(string a,string b, string c, string d, int line){
         d = "%"+d;
         temp = getUpdateGlobalVarName();
         addLoadCodeLine(temp, d, 1);
+        d = temp;
+
     }
     addStoreCodeLine("%" + to_string(chVar), d, 1);
     codeStringsVector.emplace_back(returnTabsString(1)+"br label %" + c5);
@@ -796,7 +798,7 @@ int main(){
 //    x = parseAndTurnToLLCode(" n = n - 1   ", 9, x);
 //    x = parseAndTurnToLLCode(" }   ", 10, x);
 //    parseAndTurnToLLCode(" a = b   ", 11, x);
-    createChooseCode("a+y","b","c","d",1);
+    createChooseCode("a+y","b+z+t","c","d",1);
 
 
 
