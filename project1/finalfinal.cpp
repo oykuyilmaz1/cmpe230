@@ -15,6 +15,7 @@ using namespace std;
 #define WHILE_BODY_STRING  "WHILE_BODY_STRING"
 #define WHILE_END_STRING  "WHILE_END_STRING"
 #define IF_START_STRING  "IF_START_STRING"
+#define IF_BODY_STRING  "IF_BODY_STRING"
 #define IF_END_STRING  "IF_END_STRING"
 #define CHOOSE_STRING  "CHOOSE_STRING"
 #define PRINT_STRING  "PRINT_STRING"
@@ -237,6 +238,9 @@ int infixToPostFix(string str){
         cout << "Syntax Error8"<<endl;
         return 0;
     }
+    if(isOpen || isOperator){
+        return 0;
+    }
     while(!stk.empty()){
         string res = "";
         res += stk.top();
@@ -439,6 +443,7 @@ void createWhileConditionCode(string expr, int line){
     string temp = getUpdateGlobalVarName();
     codeStringsVector.emplace_back(returnTabsString(1) + temp + " = icmp ne i32 "+ result+", 0");
     codeStringsVector.emplace_back(returnTabsString(1) + "br i1 " + temp + ", label %" + globalWhileBodyName + ", label %" + globalWhileEndName);
+    codeStringsVector.emplace_back(globalWhileBodyName + ":");
 }
 
 ///print function
@@ -540,64 +545,107 @@ int extractPrint(string str, string *expr){
     *expr = str;
     return 1;
 }
+int checkLineOrder(string line, string lineBefore){
+    if(line == WHILE_COND_STRING){
+        return lineBefore != WHILE_COND_STRING || lineBefore != WHILE_BODY_STRING
+        || lineBefore != IF_START_STRING || lineBefore != IF_BODY_STRING;
+    }
+    if(line == WHILE_BODY_STRING){
+        return lineBefore == WHILE_COND_STRING || lineBefore != WHILE_BODY_STRING;
+    }
+    if(line == WHILE_END_STRING){
+        return lineBefore == WHILE_BODY_STRING;
+    }
+    if(line == IF_START_STRING){
+        return lineBefore != WHILE_COND_STRING || lineBefore != WHILE_BODY_STRING
+        || lineBefore != IF_START_STRING || lineBefore != IF_BODY_STRING;
+    }
+    if(line == IF_BODY_STRING){
+        return lineBefore == IF_START_STRING || lineBefore != IF_BODY_STRING;
+    }
+    if(line == IF_END_STRING){
+        return lineBefore == IF_BODY_STRING;
+    }
+    return 1;
+}
 
-//string parseAndTurnToLLCode(string line, int lineNum, string lineBefore){
-//    line+="$";
-//    if(removeWhiteSpaces(line) == "$"){
-//        return EMPTY_lINE_STRING;
-//    }
-//    int i = 0;
-//    int n = line.length()-1;
-//    string str1="",expr="", str2="",str3="";
-//    int isRightP = 0, isCurly = 0;
-//    while(i < n){
-//        char c = line[i];
-//        if(c == '='){
-//            expr = line.substr(i+1);
-//            createAssignmentCode(str1, expr,lineNum);
-//            if(lineBefore == WHILE_BODY_STRING){
-//                return WHILE_BODY_STRING;
-//            }
-//            return ASSIGNMENT_STRING;
-//        }
-//        else if(c == '('){
-//            string condType = checkExpressionOrCondition(str1);
-//            if(condType == IF_START_STRING){
-//                return IF_START_STRING;
-//            }
-//            else if(condType == CHOOSE_STRING){
-//                return CHOOSE_STRING;
-//            }
-//            else if(condType == WHILE_COND_STRING){
-//                return WHILE_COND_STRING;
-//            }
-//            else if(condType == PRINT_STRING){
-//                return PRINT_STRING;
-//            }
-//            else {
-//                createSyntaxErrorLines(lineNum);
-//            }
-//        }
-//        else if(isalnum(c)){
-//            str1 += c;
-//        }
-//
-//        i++;
-//    }
-//}
+string parseAndTurnToLLCode(string line, int lineNum, string lineBefore){
+    line+="$";
+    if(removeWhiteSpaces(line) == "$"){
+        return EMPTY_lINE_STRING;
+    }
+    int i = 0;
+    int n = line.length()-1;
+    string str1="",expr="", str2="",str3="";
+    int isRightP = 0, isCurly = 0;
+    while(i < n){
+        char c = line[i];
+        if(c == '='){
+            expr = line.substr(i+1);
+            createAssignmentCode(str1, expr,lineNum);
+            if(lineBefore == WHILE_BODY_STRING || lineBefore == WHILE_COND_STRING){
+                return WHILE_BODY_STRING;
+            }
+            return ASSIGNMENT_STRING;
+        }
+        else if(c == '('){
+            string condType = checkExpressionOrCondition(str1);
+            if(condType == IF_START_STRING){
+                return IF_START_STRING;
+            }
+            else if(condType == CHOOSE_STRING){
+                return CHOOSE_STRING;
+            }
+            else if(condType == WHILE_COND_STRING){
+                str1 = line.substr(i);
+                extractCondition(str1, &expr);
+                createWhileConditionCode(expr+"$", lineNum);
+                return WHILE_COND_STRING;
+            }
+            else if(condType == PRINT_STRING){
+                return lineBefore;
+            }
+            else {
+                createSyntaxErrorLines(lineNum);
+            }
+        }
+        else if(c == '}'){
+            if(lineBefore == WHILE_BODY_STRING){
+                codeStringsVector.emplace_back(returnTabsString(1) + "br label %" + globalWhileCondName);
+
+                codeStringsVector.emplace_back(globalWhileEndName + ":");
+                getUpdateGlobalVarName();
+                return WHILE_END_STRING;
+            }
+        }
+        else if(isalnum(c)){
+            str1 += c;
+        }
+        i++;
+    }
+    return EMPTY_lINE_STRING;
+}
 
 
 int main(){
 //    createSyntaxErrorLines(100);
 //    createAssignmentCode("oyku","10 + a * (b+c)$",9);
 //    createPrintCode("aa + bb *c$",8);
-    createWhileConditionCode("n$",9);
+//    createWhileConditionCode("n$",9);
 
 //    cout<<isValidVariable("oyk*u")<<endl;
 //    parseAndTurnToLLCode("a89 = ", 1);
 //    string expr;
 //    int v = extractCondition("((oykujykjutky)) { $", &expr);
 //    cout<<expr<< " "<<v<<endl;
+    string x = parseAndTurnToLLCode("while(n)    {  ", 5, EMPTY_lINE_STRING);
+    x = parseAndTurnToLLCode(" t = f1  ", 6, x);
+    x = parseAndTurnToLLCode("f1 = f0 +f1  ", 7, x);
+    x = parseAndTurnToLLCode("f0 = t ", 8, x);
+    x = parseAndTurnToLLCode(" n = n - 1  + ", 9, x);
+    x = parseAndTurnToLLCode(" }   ", 10, x);
+    parseAndTurnToLLCode(" a = b   ", 11, x);
+
 
 
 
@@ -622,4 +670,5 @@ int main(){
     for(auto line : syntaxErrorVector){
         cout << line << endl;
     }
+    return 0;
 }
