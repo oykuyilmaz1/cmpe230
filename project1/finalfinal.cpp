@@ -35,11 +35,12 @@ string globalIfBodyName = "ifbody1";
 string globalIfEndName = "ifend1";
 ///choose variables
 int chooseNum = 1;
-string chooseName = "%choose1";
+string chooseName = "choose1";
+int chooseVarNum = 1;
 string getUpdateChooseName(){
     string temp = chooseName;
     chooseNum++;
-    chooseName = "%choose" + to_string(chooseNum);
+    chooseName = "choose" + to_string(chooseNum);
     return temp;
 }
 
@@ -624,16 +625,21 @@ string returnChooseOrExpression(string cond){
     return ERROR_STRING;
 }
 string createChooseCode(string a,string b, string c, string d, int line){
-    string resultVar = getUpdateGlobalVarName();
+//    string resultVar = getUpdateGlobalVarName();
+    int chVar = chooseVarNum;
+    addAllocationCodeLine(to_string(chooseVarNum), 1);
+    addInitializationCodeLine(to_string(chooseVarNum), 1);
+    chooseVarNum++;
     // if all expression
-    a = createExpressionCode(a, line);
-    b = createExpressionCode(b, line);
-    c = createExpressionCode(c, line);
-    d = createExpressionCode(d, line);
+    a = createExpressionCode(a+"$", line);
+    b = createExpressionCode(b+"$", line);
+    c = createExpressionCode(c+"$", line);
+    d = createExpressionCode(d+"$", line);
     initVarIfNotExist(a);
     initVarIfNotExist(b);
     initVarIfNotExist(c);
     initVarIfNotExist(d);
+
     string tempA, tempB,tempC, tempD;
     tempB = getUpdateGlobalVarName();
     tempC = getUpdateGlobalVarName();
@@ -644,39 +650,58 @@ string createChooseCode(string a,string b, string c, string d, int line){
         addLoadCodeLine(tempA, a, 1);
         a = tempA;
     }
-
-    string c1,c2,c3,c4, temp;
+    string c1,c2,c3,c4,c5, temp;
     c1 = getUpdateChooseName();
     c2 = getUpdateChooseName();
     c3 = getUpdateChooseName();
     c4 = getUpdateChooseName();
+    c5 = getUpdateChooseName();
     //if (a == 0)
     temp = getUpdateGlobalVarName();
     codeStringsVector.emplace_back(returnTabsString(1) + temp + " = icmp eq i32 "+ a +", 0");
-    codeStringsVector.emplace_back(returnTabsString(1) + "br i1 "+temp + ", label "+ c1 +" label " + c2);
+    codeStringsVector.emplace_back(returnTabsString(1) + "br i1 "+temp + ", label %"+ c1 +", label %" + c2);
     // do
     codeStringsVector.emplace_back(c1+":");
     if(isOriginalVariable(b)){
         b = "%"+b;
+        temp = getUpdateGlobalVarName();
+        addLoadCodeLine(temp, b, 1);
+        b = temp;
     }
-    addLoadCodeLine(resultVar, b, 1);
-    codeStringsVector.emplace_back("br label " + c4);
+    addStoreCodeLine("%" + to_string(chVar), b, 1);
+    codeStringsVector.emplace_back(returnTabsString(1)+"br label %" + c5);
 
     //if(a>0)
     codeStringsVector.emplace_back(c2+":");
+//    tempA = getUpdateGlobalVarName();
+//    addLoadCodeLine(tempA, a, 1);
+    temp = getUpdateGlobalVarName();
+    codeStringsVector.emplace_back(returnTabsString(1) + temp + " = icmp sgt i32 "+ a +", 0");
+    codeStringsVector.emplace_back(returnTabsString(1) + "br i1 "+temp + ", label %"+ c3 +", label %" + c4);
+    //do
+    codeStringsVector.emplace_back(c3+":");
     if(isOriginalVariable(c)){
         c = "%"+c;
+        temp = getUpdateGlobalVarName();
+        addLoadCodeLine(temp, c, 1);
+        c = temp;
     }
-    addLoadCodeLine(resultVar, c, 1);
-    codeStringsVector.emplace_back(returnTabsString(1) + "br i1 "+temp + ", label "+ c4 +" label " + c3);
+
+    addStoreCodeLine("%" + to_string(chVar), c, 1);
+    codeStringsVector.emplace_back(returnTabsString(1)+"br label %" + c5);
     //else
-    codeStringsVector.emplace_back(c3+":");
+    codeStringsVector.emplace_back(c4+":");
     if(isOriginalVariable(d)){
         d = "%"+d;
+        temp = getUpdateGlobalVarName();
+        addLoadCodeLine(temp, d, 1);
     }
-    addLoadCodeLine(resultVar, d, 1);
-    codeStringsVector.emplace_back(c4+":");
-    return resultVar;
+    addStoreCodeLine("%" + to_string(chVar), d, 1);
+    codeStringsVector.emplace_back(returnTabsString(1)+"br label %" + c5);
+    codeStringsVector.emplace_back(c5+":");
+    temp = getUpdateGlobalVarName();
+    addLoadCodeLine(temp, "%"+to_string(chVar), 1);
+    return temp;
 
 
 
@@ -771,7 +796,7 @@ int main(){
 //    x = parseAndTurnToLLCode(" n = n - 1   ", 9, x);
 //    x = parseAndTurnToLLCode(" }   ", 10, x);
 //    parseAndTurnToLLCode(" a = b   ", 11, x);
-    createChooseCode("a","b","c","d",1);
+    createChooseCode("a+y","b","c","d",1);
 
 
 
