@@ -10,18 +10,12 @@
 
 using namespace std;
 #define ERROR_STRING  "ERROR_STRING"
-#define ASSIGNMENT_STRING  "ASSIGNMENT_STRING"
-#define WHILE_COND_STRING  "WHILE_COND_STRING"
-#define WHILE_BODY_STRING  "WHILE_BODY_STRING"
-#define WHILE_END_STRING  "WHILE_END_STRING"
-#define IF_START_STRING  "IF_START_STRING"
-#define IF_BODY_STRING  "IF_BODY_STRING"
-#define IF_END_STRING  "IF_END_STRING"
-#define CHOOSE_STRING  "CHOOSE_STRING"
-#define PRINT_STRING  "PRINT_STRING"
-#define EMPTY_lINE_STRING  "EMPTY_lINE_STRING"
-#define EXPRESSION_STRING  "EXPRESSION_STRING"
-
+#define IF_START_STRING "IF_START_STRING"
+#define CHOOSE_STRING "CHOOSE_STRING"
+#define WHILE_COND_STRING "WHILE_COND_STRING"
+#define PRINT_STRING "PRINT_STRING"
+#define REGULAR_STRING "REGULAR_STRING"
+#define EXPRESSION_STRING "EXPRESSION_STRING"
 
 /// expression variables
 queue<string> expresionQueue;
@@ -39,6 +33,15 @@ int ifNum = 1;
 string globalIfCondName = "ifcond1";
 string globalIfBodyName = "ifbody1";
 string globalIfEndName = "ifend1";
+///choose variables
+int chooseNum = 1;
+string chooseName = "%choose1";
+string getUpdateChooseName(){
+    string temp = chooseName;
+    chooseNum++;
+    chooseName = "%choose" + to_string(chooseNum);
+    return temp;
+}
 
 ///llCodeVariables
 vector<string> allocateCodeStringsVector;
@@ -48,6 +51,10 @@ vector<string> syntaxErrorVector;
 
 unordered_set<string> variableSet;
 
+int isInWhile = 0;
+int isInIf = 0;
+
+
 string returnTabsString(int numOfTabs){
     string result = "";
     for(int i = 0; i<numOfTabs; i++){
@@ -55,7 +62,7 @@ string returnTabsString(int numOfTabs){
     }
     return result;
 }
-string removeWhiteSpaces(string line){
+string removeWhiteSpaces(const string line){
     return std::regex_replace( line, std::regex("\\s+"), "" );
 }
 
@@ -255,9 +262,6 @@ int infixToPostFix(string str){
     }
     return 1;
 }
-
-
-
 
 
 /// ll code functions
@@ -518,8 +522,12 @@ int checkParentheses(string str){
     }
     return stk.empty();
 }
+
 int extractCondition(string str, string *expr){
     if(!checkParentheses(str)){
+        return 0;
+    }
+    if(str[0] != '('){
         return 0;
     }
     int i = 1;
@@ -570,96 +578,179 @@ int extractPrint(string str, string *expr){
     *expr = str;
     return 1;
 }
-int checkLineOrder(string line, string lineBefore){
-    if(line == WHILE_COND_STRING){
-        return lineBefore != WHILE_COND_STRING || lineBefore != WHILE_BODY_STRING
-        || lineBefore != IF_START_STRING || lineBefore != IF_BODY_STRING;
+//int checkLineOrder(string line, string lineBefore){
+//    if(line == WHILE_COND_STRING){
+//        return lineBefore != WHILE_COND_STRING || lineBefore != WHILE_BODY_STRING
+//        || lineBefore != IF_START_STRING || lineBefore != IF_BODY_STRING;
+//    }
+//    if(line == WHILE_BODY_STRING){
+//        return lineBefore == WHILE_COND_STRING || lineBefore != WHILE_BODY_STRING;
+//    }
+//    if(line == WHILE_END_STRING){
+//        return lineBefore == WHILE_BODY_STRING;
+//    }
+//    if(line == IF_START_STRING){
+//        return lineBefore != WHILE_COND_STRING || lineBefore != WHILE_BODY_STRING
+//        || lineBefore != IF_START_STRING || lineBefore != IF_BODY_STRING;
+//    }
+//    if(line == IF_BODY_STRING){
+//        return lineBefore == IF_START_STRING || lineBefore != IF_BODY_STRING;
+//    }
+//    if(line == IF_END_STRING){
+//        return lineBefore == IF_BODY_STRING;
+//    }
+//    return 1;
+//}
+
+string returnChooseOrExpression(string cond){
+    string res="";
+    for(char c:cond){
+        if(c == '('){
+            res = checkExpressionOrCondition(res);
+            if(res == CHOOSE_STRING || res == EXPRESSION_STRING){
+                return  res;
+            }
+            else{
+                return ERROR_STRING;
+            }
+        }
+        else if(c == '$'){
+            return EXPRESSION_STRING;
+        }
+        else {
+            res += c;
+        }
     }
-    if(line == WHILE_BODY_STRING){
-        return lineBefore == WHILE_COND_STRING || lineBefore != WHILE_BODY_STRING;
+    return ERROR_STRING;
+}
+string createChooseCode(string a,string b, string c, string d, int line){
+    string resultVar = getUpdateGlobalVarName();
+    // if all expression
+    a = createExpressionCode(a, line);
+    b = createExpressionCode(b, line);
+    c = createExpressionCode(c, line);
+    d = createExpressionCode(d, line);
+    initVarIfNotExist(a);
+    initVarIfNotExist(b);
+    initVarIfNotExist(c);
+    initVarIfNotExist(d);
+    string tempA, tempB,tempC, tempD;
+    tempB = getUpdateGlobalVarName();
+    tempC = getUpdateGlobalVarName();
+    tempD = getUpdateGlobalVarName();
+    if(isOriginalVariable(a)){
+        a = "%"+a;
+        tempA = getUpdateGlobalVarName();
+        addLoadCodeLine(tempA, a, 1);
+        a = tempA;
     }
-    if(line == WHILE_END_STRING){
-        return lineBefore == WHILE_BODY_STRING;
+
+    string c1,c2,c3,c4, temp;
+    c1 = getUpdateChooseName();
+    c2 = getUpdateChooseName();
+    c3 = getUpdateChooseName();
+    c4 = getUpdateChooseName();
+    //if (a == 0)
+    temp = getUpdateGlobalVarName();
+    codeStringsVector.emplace_back(returnTabsString(1) + temp + " = icmp eq i32 "+ a +", 0");
+    codeStringsVector.emplace_back(returnTabsString(1) + "br i1 "+temp + ", label "+ c1 +" label " + c2);
+    // do
+    codeStringsVector.emplace_back(c1+":");
+    if(isOriginalVariable(b)){
+        b = "%"+b;
     }
-    if(line == IF_START_STRING){
-        return lineBefore != WHILE_COND_STRING || lineBefore != WHILE_BODY_STRING
-        || lineBefore != IF_START_STRING || lineBefore != IF_BODY_STRING;
+    addLoadCodeLine(resultVar, b, 1);
+    codeStringsVector.emplace_back("br label " + c4);
+
+    //if(a>0)
+    codeStringsVector.emplace_back(c2+":");
+    if(isOriginalVariable(c)){
+        c = "%"+c;
     }
-    if(line == IF_BODY_STRING){
-        return lineBefore == IF_START_STRING || lineBefore != IF_BODY_STRING;
+    addLoadCodeLine(resultVar, c, 1);
+    codeStringsVector.emplace_back(returnTabsString(1) + "br i1 "+temp + ", label "+ c4 +" label " + c3);
+    //else
+    codeStringsVector.emplace_back(c3+":");
+    if(isOriginalVariable(d)){
+        d = "%"+d;
     }
-    if(line == IF_END_STRING){
-        return lineBefore == IF_BODY_STRING;
-    }
-    return 1;
+    addLoadCodeLine(resultVar, d, 1);
+    codeStringsVector.emplace_back(c4+":");
+    return resultVar;
+
+
+
 }
 
-string parseAndTurnToLLCode(string line, int lineNum, string lineBefore){
-    line+="$";
-    if(removeWhiteSpaces(line) == "$"){
-        return lineBefore;
-    }
-    int i = 0;
-    int n = line.length()-1;
-    string str1="",expr="", str2="",str3="";
-    int isRightP = 0, isCurly = 0;
-    while(i < n){
-        char c = line[i];
-        if(c == '='){
-            expr = line.substr(i+1);
-            createAssignmentCode(str1, expr,lineNum);
-            if(lineBefore == WHILE_BODY_STRING || lineBefore == WHILE_COND_STRING){
-                return WHILE_BODY_STRING;
-            }
-            if(lineBefore == IF_START_STRING || lineBefore == IF_BODY_STRING){
-                return IF_BODY_STRING;
-            }
-            return ASSIGNMENT_STRING;
-        }
-        else if(c == '('){
-            string condType = checkExpressionOrCondition(str1);
-            if(condType == IF_START_STRING){
-                str1 = line.substr(i);
-                extractCondition(str1, &expr);
-                createIFConditionCode(expr+"$", lineNum);
-                return IF_START_STRING;
-            }
-            else if(condType == CHOOSE_STRING){
-                return CHOOSE_STRING;
-            }
-            else if(condType == WHILE_COND_STRING){
-                str1 = line.substr(i);
-                extractCondition(str1, &expr);
-                createWhileConditionCode(expr+"$", lineNum);
-                return WHILE_COND_STRING;
-            }
-            else if(condType == PRINT_STRING){
-                return lineBefore;
-            }
-            else {
-                createSyntaxErrorLines(lineNum);
-            }
-        }
-        else if(c == '}'){
-            if(lineBefore == WHILE_BODY_STRING){
-                codeStringsVector.emplace_back(returnTabsString(1) + "br label %" + globalWhileCondName);
-                codeStringsVector.emplace_back(globalWhileEndName + ":");
-                updateWhileName();
-                return WHILE_END_STRING;
-            }
-            else if(lineBefore == IF_BODY_STRING){
-                codeStringsVector.emplace_back(globalIfEndName + ":");
-                updateIfName();
-                return IF_END_STRING;
-            }
-        }
-        else if(isalnum(c)){
-            str1 += c;
-        }
-        i++;
-    }
-    return EMPTY_lINE_STRING;
-}
+//int parseAndTurnToLLCode(string line, int lineNum){
+//    line+="$";
+//    if(removeWhiteSpaces(line) == "$"){
+//        return 1;
+//    }
+//    int i = 0;
+//    int n = line.length();
+//    string str1="",expr="", str2="",str3="";
+//    int isRightP = 0, isCurly = 0;
+//    while(i < n){
+//        char c = line[i];
+//        if(c == '$'){
+//            return 0;
+//        }
+//        if(c == '='){
+//            expr = line.substr(i+1);
+//            createAssignmentCode(str1, expr,lineNum);
+//            if(lineBefore == WHILE_BODY_STRING || lineBefore == WHILE_COND_STRING){
+//                return WHILE_BODY_STRING;
+//            }
+//            if(lineBefore == IF_START_STRING || lineBefore == IF_BODY_STRING){
+//                return IF_BODY_STRING;
+//            }
+//            return ASSIGNMENT_STRING;
+//        }
+//        else if(c == '('){
+//            string condType = checkExpressionOrCondition(str1);
+//            if(condType == IF_START_STRING){
+//                str1 = line.substr(i);
+//                extractCondition(str1, &expr);
+//                createIFConditionCode(expr+"$", lineNum);
+//                return IF_START_STRING;
+//            }
+//            else if(condType == CHOOSE_STRING){
+//                return CHOOSE_STRING;
+//            }
+//            else if(condType == WHILE_COND_STRING){
+//                str1 = line.substr(i);
+//                extractCondition(str1, &expr);
+//                createWhileConditionCode(expr+"$", lineNum);
+//                return WHILE_COND_STRING;
+//            }
+//            else if(condType == PRINT_STRING){
+//                return lineBefore;
+//            }
+//            else {
+//                createSyntaxErrorLines(lineNum);
+//            }
+//        }
+//        else if(c == '}'){
+//            if(lineBefore == WHILE_BODY_STRING){
+//                codeStringsVector.emplace_back(returnTabsString(1) + "br label %" + globalWhileCondName);
+//                codeStringsVector.emplace_back(globalWhileEndName + ":");
+//                updateWhileName();
+//                return WHILE_END_STRING;
+//            }
+//            else if(lineBefore == IF_BODY_STRING){
+//                codeStringsVector.emplace_back(globalIfEndName + ":");
+//                updateIfName();
+//                return IF_END_STRING;
+//            }
+//        }
+//        else {
+//            str1 += c;
+//        }
+//        i++;
+//    }
+//    return EMPTY_lINE_STRING;
+//}
 
 
 int main(){
@@ -673,14 +764,14 @@ int main(){
 //    string expr;
 //    int v = extractCondition("((oykujykjutky)) { $", &expr);
 //    cout<<expr<< " "<<v<<endl;
-    string x = parseAndTurnToLLCode("if(n)    {  ", 5, EMPTY_lINE_STRING);
-    x = parseAndTurnToLLCode(" t = f1  ", 6, x);
-    x = parseAndTurnToLLCode("f1 = f0 +f1  ", 7, x);
-    x = parseAndTurnToLLCode("f0 = t ", 8, x);
-    x = parseAndTurnToLLCode(" n = n - 1   ", 9, x);
-    x = parseAndTurnToLLCode(" }   ", 10, x);
-    parseAndTurnToLLCode(" a = b   ", 11, x);
-
+//    string x = parseAndTurnToLLCode("if(n)    {  ", 5, EMPTY_lINE_STRING);
+//    x = parseAndTurnToLLCode(" a10 = 1 0 + o * uh  ", 6, x);
+//    x = parseAndTurnToLLCode("f1 = f0 +f1  ", 7, x);
+//    x = parseAndTurnToLLCode("f0 = t ", 8, x);
+//    x = parseAndTurnToLLCode(" n = n - 1   ", 9, x);
+//    x = parseAndTurnToLLCode(" }   ", 10, x);
+//    parseAndTurnToLLCode(" a = b   ", 11, x);
+    createChooseCode("a","b","c","d",1);
 
 
 
