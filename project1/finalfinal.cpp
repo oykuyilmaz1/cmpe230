@@ -34,6 +34,12 @@ string globalWhileCondName = "whcond1";
 string globalWhileBodyName = "whbody1";
 string globalWhileEndName = "whend1";
 
+///if variables
+int ifNum = 1;
+string globalIfCondName = "ifcond1";
+string globalIfBodyName = "ifbody1";
+string globalIfEndName = "ifend1";
+
 ///llCodeVariables
 vector<string> allocateCodeStringsVector;
 vector<string> initializeCodeStringsVector;
@@ -423,15 +429,13 @@ void createAssignmentCode(string targetVarOriginal, string expr, int line){
     addStoreCodeLine("%" + targetVarOriginal, varToStore,1);
 }
 ///while functions
-void getUpdateWhileName(string *whcond,string *whbody,string *whend){
-    *whcond = globalWhileCondName;
-    *whbody = globalWhileBodyName;
-    *whend = globalWhileEndName;
+void updateWhileName(){
     whileNum++;
     globalWhileCondName = "whcond" + to_string(whileNum);
     globalWhileBodyName = "whbody" + to_string(whileNum);
     globalWhileEndName = "whend" + to_string(whileNum);
 }
+
 void createWhileConditionCode(string expr, int line){
     codeStringsVector.emplace_back(globalWhileCondName + ":");
     string result = createExpressionCode(expr, line);
@@ -444,6 +448,27 @@ void createWhileConditionCode(string expr, int line){
     codeStringsVector.emplace_back(returnTabsString(1) + temp + " = icmp ne i32 "+ result+", 0");
     codeStringsVector.emplace_back(returnTabsString(1) + "br i1 " + temp + ", label %" + globalWhileBodyName + ", label %" + globalWhileEndName);
     codeStringsVector.emplace_back(globalWhileBodyName + ":");
+}
+
+///if functions
+void updateIfName(){
+    ifNum++;
+    globalWhileCondName = "ifcond" + to_string(ifNum);
+    globalWhileBodyName = "ifbody" + to_string(ifNum);
+    globalWhileEndName = "ifend" + to_string(ifNum);
+}
+void createIFConditionCode(string expr, int line){
+    codeStringsVector.emplace_back(globalIfCondName + ":");
+    string result = createExpressionCode(expr, line);
+    if(isOriginalVariable(result)){
+        string temp = getUpdateGlobalVarName();
+        addLoadCodeLine(temp, "%" + result, 1);
+        result = temp;
+    }
+    string temp = getUpdateGlobalVarName();
+    codeStringsVector.emplace_back(returnTabsString(1) + temp + " = icmp ne i32 "+ result+", 0");
+    codeStringsVector.emplace_back(returnTabsString(1) + "br i1 " + temp + ", label %" + globalIfBodyName + ", label %" + globalIfEndName);
+    codeStringsVector.emplace_back(globalIfBodyName + ":");
 }
 
 ///print function
@@ -572,7 +597,7 @@ int checkLineOrder(string line, string lineBefore){
 string parseAndTurnToLLCode(string line, int lineNum, string lineBefore){
     line+="$";
     if(removeWhiteSpaces(line) == "$"){
-        return EMPTY_lINE_STRING;
+        return lineBefore;
     }
     int i = 0;
     int n = line.length()-1;
@@ -586,11 +611,17 @@ string parseAndTurnToLLCode(string line, int lineNum, string lineBefore){
             if(lineBefore == WHILE_BODY_STRING || lineBefore == WHILE_COND_STRING){
                 return WHILE_BODY_STRING;
             }
+            if(lineBefore == IF_START_STRING || lineBefore == IF_BODY_STRING){
+                return IF_BODY_STRING;
+            }
             return ASSIGNMENT_STRING;
         }
         else if(c == '('){
             string condType = checkExpressionOrCondition(str1);
             if(condType == IF_START_STRING){
+                str1 = line.substr(i);
+                extractCondition(str1, &expr);
+                createIFConditionCode(expr+"$", lineNum);
                 return IF_START_STRING;
             }
             else if(condType == CHOOSE_STRING){
@@ -612,10 +643,14 @@ string parseAndTurnToLLCode(string line, int lineNum, string lineBefore){
         else if(c == '}'){
             if(lineBefore == WHILE_BODY_STRING){
                 codeStringsVector.emplace_back(returnTabsString(1) + "br label %" + globalWhileCondName);
-
                 codeStringsVector.emplace_back(globalWhileEndName + ":");
-                getUpdateGlobalVarName();
+                updateWhileName();
                 return WHILE_END_STRING;
+            }
+            else if(lineBefore == IF_BODY_STRING){
+                codeStringsVector.emplace_back(globalIfEndName + ":");
+                updateIfName();
+                return IF_END_STRING;
             }
         }
         else if(isalnum(c)){
@@ -638,11 +673,11 @@ int main(){
 //    string expr;
 //    int v = extractCondition("((oykujykjutky)) { $", &expr);
 //    cout<<expr<< " "<<v<<endl;
-    string x = parseAndTurnToLLCode("while(n)    {  ", 5, EMPTY_lINE_STRING);
+    string x = parseAndTurnToLLCode("if(n)    {  ", 5, EMPTY_lINE_STRING);
     x = parseAndTurnToLLCode(" t = f1  ", 6, x);
     x = parseAndTurnToLLCode("f1 = f0 +f1  ", 7, x);
     x = parseAndTurnToLLCode("f0 = t ", 8, x);
-    x = parseAndTurnToLLCode(" n = n - 1  + ", 9, x);
+    x = parseAndTurnToLLCode(" n = n - 1   ", 9, x);
     x = parseAndTurnToLLCode(" }   ", 10, x);
     parseAndTurnToLLCode(" a = b   ", 11, x);
 
