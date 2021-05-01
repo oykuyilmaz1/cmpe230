@@ -138,6 +138,7 @@ string getUpdateGlobalVarName(){
 }
 
 
+
 /** turns infix string to postfix, adds the variables and operators
  * to expression queue,
  * checks for syntax errors and returns 0 if finds one.
@@ -236,6 +237,54 @@ int infixToPostFix(string str){
                 c = str[i];
             }
             i--;
+            if(res == "choose"){
+                i++;
+                c = str[i];
+                if(isalnum(c)){
+                    while(isalnum(c)){
+                        res += c;
+                        i++;
+                        c = str[i];
+                    }
+                    i--;
+                }
+                else {
+                    stack<char> pstk;
+                    while(c == ' '){
+                        i++;
+                        c = str[i];
+                    }
+                    if(c != '('){
+                        return 0;
+                    }
+                    else {
+                        res += c;
+                        pstk.push(c);
+                        i++;
+                        c = str[i];
+                        while(!pstk.empty()){
+                            if(c == '('){
+                                res += c;
+                                pstk.push(c);
+                            }
+                            else if(c == ')'){
+                                res += c;
+                                pstk.pop();
+                            }
+                            else if(c == '$'){
+                                return 0;
+                            }
+                            else{
+                                res += c;
+                            }
+                            i++;
+                            c = str[i];
+                        }
+                    }
+                }
+                i--;
+                }
+
             expresionQueue.push(res);
             isOpen = 0; isClosed = 0; isOperator = 0; isVar =1; isNumber = 0;
         }
@@ -333,7 +382,9 @@ void initVarIfNotExist(string originalVarName){
         variableSet.insert(originalVarName);
     }
 }
-
+int isChooseFunction(string line){
+    return line.substr(0,line.find('(')) == "choose";
+}
 
 /** creates the necessary code for postfix expression string with necessary number of tabs.
  * @param numOfTabs number tabs to be added to the beginning of the code
@@ -349,7 +400,10 @@ string postfixToExpressionCode(int numOfTabs){
             expressionStack.pop();
             string var2 = expressionStack.top();
             expressionStack.pop();
-            if(isOriginalVariable(var2)){
+            if(isChooseFunction(var2)){
+                // handle choose
+            }
+            else if(isOriginalVariable(var2)){
                 var2 = "%" + var2;
                 string temp = getUpdateGlobalVarName();
                 addLoadCodeLine(temp, var2, numOfTabs);
@@ -490,27 +544,7 @@ void createPrintCode(string expr, int line){
 }
 
 ///parse line function
-string checkExpressionOrCondition(string str){
-    if(isValidVariable(str)){
-        str = removeWhiteSpaces(str);
-        if(str == "if"){
-            return IF_START_STRING;
-        }
-        else if(str == "choose"){
-            return CHOOSE_STRING;
-        }
-        else if(str == "while"){
-            return WHILE_COND_STRING;
-        }
-        else if(str == "print"){
-            return PRINT_STRING;
-        }
-        else {
-            return EXPRESSION_STRING;
-        }
-    }
-    return ERROR_STRING;
-}
+
 int checkParentheses(string str){
     stack<char> stk;
     for(char c:str){
@@ -524,106 +558,9 @@ int checkParentheses(string str){
     return stk.empty();
 }
 
-int extractCondition(string str, string *expr){
-    if(!checkParentheses(str)){
-        return 0;
-    }
-    if(str[0] != '('){
-        return 0;
-    }
-    int i = 1;
-    int n = str.length();
-    int isValid = 0;
-    string temp;
-    while(i<n){
-        if(str[i] == '{'){
-            if(removeWhiteSpaces(str.substr(i)) == "{$"){
-                isValid = 1;
-                break;
-            }
-            else{
-                break;
-            }
-        }
-        temp += str[i];
-        i++;
-    }
-    if(!isValid){
-        return isValid;
-    }
-    n = temp.length();
-    i = n-1;
-    while(i >= 0){
-        if(temp[i] == ')'){
-            temp.erase(i);
-            break;
-        }
-        i--;
-    }
-    *expr = temp;
-    return isValid;
-}
-int extractPrint(string str, string *expr){
-    if(!checkParentheses(str)){
-        return 0;
-    }
-    int n = str.length() -1;
-    int i = n-1;
-    while(i >= 0){
-        if(str[i] == ')') {
-            str.erase(i);
-            break;
-        }
-        i--;
-    }
-    *expr = str;
-    return 1;
-}
-//int checkLineOrder(string line, string lineBefore){
-//    if(line == WHILE_COND_STRING){
-//        return lineBefore != WHILE_COND_STRING || lineBefore != WHILE_BODY_STRING
-//        || lineBefore != IF_START_STRING || lineBefore != IF_BODY_STRING;
-//    }
-//    if(line == WHILE_BODY_STRING){
-//        return lineBefore == WHILE_COND_STRING || lineBefore != WHILE_BODY_STRING;
-//    }
-//    if(line == WHILE_END_STRING){
-//        return lineBefore == WHILE_BODY_STRING;
-//    }
-//    if(line == IF_START_STRING){
-//        return lineBefore != WHILE_COND_STRING || lineBefore != WHILE_BODY_STRING
-//        || lineBefore != IF_START_STRING || lineBefore != IF_BODY_STRING;
-//    }
-//    if(line == IF_BODY_STRING){
-//        return lineBefore == IF_START_STRING || lineBefore != IF_BODY_STRING;
-//    }
-//    if(line == IF_END_STRING){
-//        return lineBefore == IF_BODY_STRING;
-//    }
-//    return 1;
-//}
 
-string returnChooseOrExpression(string cond){
-    string res="";
-    for(char c:cond){
-        if(c == '('){
-            res = checkExpressionOrCondition(res);
-            if(res == CHOOSE_STRING || res == EXPRESSION_STRING){
-                return  res;
-            }
-            else{
-                return ERROR_STRING;
-            }
-        }
-        else if(c == '$'){
-            return EXPRESSION_STRING;
-        }
-        else {
-            res += c;
-        }
-    }
-    return ERROR_STRING;
-}
+
+
 string createChooseCode(string a,string b, string c, string d, int line){
 //    string resultVar = getUpdateGlobalVarName();
     int chVar = chooseVarNum;
@@ -704,80 +641,55 @@ string createChooseCode(string a,string b, string c, string d, int line){
     temp = getUpdateGlobalVarName();
     addLoadCodeLine(temp, "%"+to_string(chVar), 1);
     return temp;
-
-
+}
+void handleChooseCode(string line){
+    int i = line.find('(')+1;
+    string a = "";
+    while(line[i] != ','){
+        a += line[i];
+        i++;
+    }
+    if(isChooseFunction(a)){
+        handleChooseCode(a);
+    }
+    string b = "";
+    while(line[i] != ','){
+        b += line[i];
+        i++;
+    }
 
 }
 
+
+
+
 //int parseAndTurnToLLCode(string line, int lineNum){
-//    line+="$";
+//    //remove comments
+//    line + "$";
 //    if(removeWhiteSpaces(line) == "$"){
 //        return 1;
 //    }
 //    int i = 0;
 //    int n = line.length();
-//    string str1="",expr="", str2="",str3="";
-//    int isRightP = 0, isCurly = 0;
+//    string str1="",str2="";
 //    while(i < n){
-//        char c = line[i];
-//        if(c == '$'){
+//        if(line[i] == '='){
+//            str2 = line.substr(i);
+//
+//        }
+//        else if(line[i] == '('){
+//
+//        }
+//        else if(line[i] == '$'){
+//            createSyntaxErrorLines(lineNum);
 //            return 0;
 //        }
-//        if(c == '='){
-//            expr = line.substr(i+1);
-//            createAssignmentCode(str1, expr,lineNum);
-//            if(lineBefore == WHILE_BODY_STRING || lineBefore == WHILE_COND_STRING){
-//                return WHILE_BODY_STRING;
-//            }
-//            if(lineBefore == IF_START_STRING || lineBefore == IF_BODY_STRING){
-//                return IF_BODY_STRING;
-//            }
-//            return ASSIGNMENT_STRING;
-//        }
-//        else if(c == '('){
-//            string condType = checkExpressionOrCondition(str1);
-//            if(condType == IF_START_STRING){
-//                str1 = line.substr(i);
-//                extractCondition(str1, &expr);
-//                createIFConditionCode(expr+"$", lineNum);
-//                return IF_START_STRING;
-//            }
-//            else if(condType == CHOOSE_STRING){
-//                return CHOOSE_STRING;
-//            }
-//            else if(condType == WHILE_COND_STRING){
-//                str1 = line.substr(i);
-//                extractCondition(str1, &expr);
-//                createWhileConditionCode(expr+"$", lineNum);
-//                return WHILE_COND_STRING;
-//            }
-//            else if(condType == PRINT_STRING){
-//                return lineBefore;
-//            }
-//            else {
-//                createSyntaxErrorLines(lineNum);
-//            }
-//        }
-//        else if(c == '}'){
-//            if(lineBefore == WHILE_BODY_STRING){
-//                codeStringsVector.emplace_back(returnTabsString(1) + "br label %" + globalWhileCondName);
-//                codeStringsVector.emplace_back(globalWhileEndName + ":");
-//                updateWhileName();
-//                return WHILE_END_STRING;
-//            }
-//            else if(lineBefore == IF_BODY_STRING){
-//                codeStringsVector.emplace_back(globalIfEndName + ":");
-//                updateIfName();
-//                return IF_END_STRING;
-//            }
-//        }
 //        else {
-//            str1 += c;
+//            str1 += line[i];
 //        }
-//        i++;
 //    }
-//    return EMPTY_lINE_STRING;
 //}
+
 
 
 int main(){
@@ -798,8 +710,9 @@ int main(){
 //    x = parseAndTurnToLLCode(" n = n - 1   ", 9, x);
 //    x = parseAndTurnToLLCode(" }   ", 10, x);
 //    parseAndTurnToLLCode(" a = b   ", 11, x);
-    createChooseCode("a+y","b+z+t","c","d",1);
-
+//    createChooseCode("a+y","b+z+t","c","d",1);
+//    infixToPostFix(" choose (zk) + 9$");
+    handleChooseCode("(a,b,c,d)");
 
 
     cout << "-----ASSIGN------" << endl;
